@@ -198,22 +198,11 @@ void loop() {
     output = voltageOutput;
   }
 
-  // Soft limits with automatic recovery to center
-  bool outOfLimits = false;
+  // Soft limits con recuperación al centro (solo activos tras calibrar)
   if (railLeftLimit != 0 || railRightLimit != 0) {
     if (motorPosition < railLeftLimit) {
-      outOfLimits = true;
       output = INVERT_MOTOR_DIRECTION ? -170 : 170;
     } else if (motorPosition > railRightLimit) {
-      outOfLimits = true;
-      output = INVERT_MOTOR_DIRECTION ? 170 : -170;
-    }
-  } else {
-    if (motorPosition < -FALLBACK_LIMIT) {
-      outOfLimits = true;
-      output = INVERT_MOTOR_DIRECTION ? -170 : 170;
-    } else if (motorPosition > FALLBACK_LIMIT) {
-      outOfLimits = true;
       output = INVERT_MOTOR_DIRECTION ? 170 : -170;
     }
   }

@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import FRONTEND_DIR
-from .state import state
+from .states import state
 from .routes import router
 from .loops import _clean_stop_and_close
 

@@ -1,10 +1,16 @@
+"""Estado global de la aplicación y comprobaciones/chequeos de estado.
+
+Contiene el estado compartido (AppState), el broadcast por WebSocket y
+todas las comprobaciones y chequeos de estado usados por las rutas.
+"""
 import asyncio
 import json
 import threading
 from typing import Optional, List, Dict
 from fastapi import WebSocket
 
-from .serial_controller import SerialController
+from .serial import SerialController
+
 
 class AppState:
     def __init__(self):
@@ -12,7 +18,6 @@ class AppState:
         self.ws_clients: List[WebSocket] = []
         self.is_running = False
         self.is_monitoring = False
-        self.current_controller_type = "LQR"
         self.control_thread: Optional[threading.Thread] = None
         self.monitor_thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
@@ -48,3 +53,27 @@ async def _ws_broadcast_async(data: dict):
 def ws_broadcast(data: dict):
     if state.loop is not None:
         asyncio.run_coroutine_threadsafe(_ws_broadcast_async(data), state.loop)
+
+
+# ── Comprobaciones / chequeos de estado ──────────────────────────
+
+def serial_connected() -> bool:
+    return state.controller.is_connected()
+
+
+def is_idle() -> bool:
+    return not state.is_running
+
+
+def check_serial() -> dict:
+    """Devuelve un error si el serial no está conectado (None si está OK)."""
+    if not serial_connected():
+        return {"error": "Serial no conectado"}
+    return None
+
+
+def check_idle() -> dict:
+    """Devuelve un error si hay un proceso en ejecución (None si está OK)."""
+    if state.is_running:
+        return {"error": "Hay un proceso activo"}
+    return None

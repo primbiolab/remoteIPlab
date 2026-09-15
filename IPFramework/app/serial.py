@@ -1,7 +1,16 @@
+"""Comunicación serial con el Arduino.
+
+Único archivo responsable de la comunicación con el hardware:
+conexión, lectura de estado, envío de voltaje, comandos de calibración
+y movimiento. No contiene lógica de control (ver control/).
+"""
 import math
 import serial
 import time
 import threading
+
+from .config import MOTOR_PPR, SHAFT_R
+
 
 class SerialController:
     def __init__(self, port='/dev/ttyACM0', baudrate=115200):
@@ -9,27 +18,10 @@ class SerialController:
         self.baudrate = baudrate
         self.ser = None
 
-        self.MOTOR_PPR = 2400
-        self.SHAFT_R = 1.2
-        self.g = 9.81
-        self.mp = 0.097
-        self.lp = 0.2
-        self.mplp = self.mp * self.lp
-        self.Jp = 0.00517333
-        self.INERTIA_EQ = self.Jp + self.mplp * self.lp
-        self.MGL = self.mplp * self.g
-        self.desired_energy = 2 * self.MGL
+        self.MOTOR_PPR = MOTOR_PPR
+        self.SHAFT_R = SHAFT_R
 
-        self.K = [1600, 140, -13, -7.5]
-        self.k_swingup = 1.5
-        self.theta_threshold = math.radians(12)
-        self.angle_setpoint = math.pi
         self.pos_limit_pulses = 5000
-        self.startup_kick_voltage = 2.2
-        self.startup_kick_max_steps = 12
-        self.startup_kick_steps = 0
-        self.startup_window_steps = 200
-        self.startup_w_threshold = 0.08
 
         self.rail_left_pulses = 0
         self.rail_right_pulses = 0
@@ -214,8 +206,12 @@ class SerialController:
             tolerance = self.position_tolerance
         return abs(self.state["raw_pulses"] - self.rail_center_pulses) <= tolerance
 
+    def is_calibrated(self) -> bool:
+        """Indica si ya se fijaron los extremos del riel (E/D)."""
+        return self.rail_left_pulses != 0 or self.rail_right_pulses != 0
+
     def is_out_of_limits(self) -> bool:
-        return abs(self.state["raw_pulses"]) > self.pos_limit_pulses
+        return self.is_calibrated() and abs(self.state["raw_pulses"]) > self.pos_limit_pulses
 
     def apply_calibration(self) -> bool:
         if not self.is_at_center():
@@ -234,59 +230,3 @@ class SerialController:
 
     def pulses_to_cm(self, pulses: float) -> float:
         return (2.0 * math.pi * pulses / self.MOTOR_PPR) * self.SHAFT_R
-
-    # ── LQR + Swing-up control ──────────────────────────────────
-
-    def avoidStall(self, u: float) -> float:
-        MAX_STALL_U = 90.0
-        if abs(u) < MAX_STALL_U:
-            return (2.0 + MAX_STALL_U) if u > 0 else (-2.0 - MAX_STALL_U)
-        return u
-
-    def compute_control(self) -> float:
-        theta = self.state["angle_rad"]
-        w = self.state["w_rad_s"]
-        x = self.state["pos_cm"]
-        v = self.state["vel_cm_s"]
-        raw_pulses = self.state["raw_pulses"]
-
-        if self.startup_window_steps > 0:
-            self.startup_window_steps -= 1
-            near_bottom = (theta > (2 * math.pi - 0.35) or theta < 0.35)
-            near_rest = abs(w) < self.startup_w_threshold
-            if near_bottom and near_rest and self.startup_kick_steps < self.startup_kick_max_steps:
-                self.startup_kick_steps += 1
-                kick_dir = -1.0 if raw_pulses > 0 else 1.0
-                return kick_dir * self.startup_kick_voltage
-
-        if abs(raw_pulses) > self.pos_limit_pulses:
-            return 12.0 if raw_pulses <= 0 else -12.0
-
-        if abs(self.angle_setpoint - theta) < self.theta_threshold:
-            u_lqr = (
-                self.K[0] * (self.angle_setpoint - theta)
-                - self.K[1] * w
-                + self.K[2] * (0 - x)
-                - self.K[3] * v
-            )
-            u_pwm = self.avoidStall(u_lqr)
-            u_pwm = max(min(u_pwm, 255.0), -255.0)
-            vol_u = u_pwm * (12.0 / 255.0)
-            return vol_u
-
-        current_energy = (
-            0.5 * self.INERTIA_EQ * (w ** 2)
-            + self.MGL * (1 - math.cos(theta))
-        )
-        if (theta > (2 * math.pi - 0.28) or theta < 0.28) and current_energy < 0.85:
-            accel = -300 * self.k_swingup * abs(current_energy - self.desired_energy) * w
-            u_pwm = self.avoidStall(accel)
-            u_pwm = max(min(u_pwm, 255.0), -255.0)
-            vol_u = u_pwm * (12.0 / 255.0)
-            return vol_u
-
-        return 0.0
-
-    def reset_startup(self):
-        self.startup_kick_steps = 0
-        self.startup_window_steps = 200

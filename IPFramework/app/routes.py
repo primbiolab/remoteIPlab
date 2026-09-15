@@ -1,21 +1,49 @@
+"""Comunicación con el frontend (API REST + WebSocket).
+
+Único archivo responsable de la comunicación con el frontend:
+esquemas de las peticiones, endpoints REST y el WebSocket.
+"""
 import json
 import csv
 import io
-import math
-import time
 import threading
+from typing import Optional, List
+
+from pydantic import BaseModel
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .state import state, ws_broadcast
-from .schemas import ConnectRequest, GainsRequest, ControllerRequest, MoveRequest
+from .states import state, ws_broadcast, check_serial, check_idle
+from . import control as control_dispatcher
 from .loops import (
     _monitor_loop, _control_loop_lqr,
     _stop_all_threads, _clean_stop_and_close,
 )
 
 router = APIRouter()
+
+
+# ── Esquemas de las peticiones del frontend ──────────────────────
+
+class ConnectRequest(BaseModel):
+    port: str
+    baudrate: int = 115200
+
+
+class GainsRequest(BaseModel):
+    gains: List[float]
+
+
+class ControllerRequest(BaseModel):
+    controller: str = "LQR"
+    gains: Optional[List[float]] = None
+
+
+class MoveRequest(BaseModel):
+    direction: str
+    voltage: float = 5.0
+
 
 # ── Health ──────────────────────────────────────────────────────
 
@@ -27,7 +55,7 @@ async def health():
         "connected": ctrl.is_connected(),
         "running": state.is_running,
         "monitoring": state.is_monitoring,
-        "controller": state.current_controller_type,
+        "controller": control_dispatcher.get_current_type(),
         "calibration": {
             "left_pulses": ctrl.rail_left_pulses if ctrl else 0,
             "right_pulses": ctrl.rail_right_pulses if ctrl else 0,
@@ -67,10 +95,12 @@ async def disconnect_serial():
 
 @router.post("/monitor/start")
 async def start_monitor():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
-    if state.is_running:
-        return JSONResponse(status_code=400, content={"error": "Hay un proceso activo"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
+    err = check_idle()
+    if err:
+        return JSONResponse(status_code=400, content=err)
 
     _stop_all_threads()
     state.is_monitoring = True
@@ -87,10 +117,12 @@ async def stop_monitor():
 
 @router.post("/start")
 async def start_control():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
-    if state.is_running:
-        return JSONResponse(status_code=400, content={"error": "Hay un proceso activo"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
+    err = check_idle()
+    if err:
+        return JSONResponse(status_code=400, content=err)
 
     _stop_all_threads()
     for k in state.data_log:
@@ -99,7 +131,7 @@ async def start_control():
     state.is_running = True
     state.control_thread = threading.Thread(target=_control_loop_lqr, daemon=True)
     state.control_thread.start()
-    return {"status": "running", "controller": state.current_controller_type}
+    return {"status": "running", "controller": control_dispatcher.get_current_type()}
 
 @router.post("/stop")
 async def stop_control():
@@ -111,24 +143,26 @@ async def stop_control():
 
 @router.post("/controller")
 async def set_controller(req: ControllerRequest):
-    state.current_controller_type = req.controller
-    if req.gains:
-        state.controller.K = req.gains
+    gains = None
+    if req.gains is not None and len(req.gains) == 4:
+        gains = req.gains
+    control_dispatcher.set_controller(req.controller, gains)
     return {"status": "ok", "controller": req.controller}
 
 @router.post("/gains")
 async def set_gains(req: GainsRequest):
-    if len(req.gains) == 4:
-        state.controller.K = req.gains
-        return {"status": "ok", "gains": req.gains}
-    return JSONResponse(status_code=400, content={"error": "Se necesitan exactamente 4 ganancias"})
+    if len(req.gains) != 4:
+        return JSONResponse(status_code=400, content={"error": "Se necesitan exactamente 4 ganancias"})
+    control_dispatcher.set_gains(req.gains)
+    return {"status": "ok", "gains": req.gains}
 
 # ── Calibration ─────────────────────────────────────────────────
 
 @router.post("/calibrate/left")
 async def calibrate_left():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     pulses = state.controller.set_left_limit()
     cm = state.controller.pulses_to_cm(pulses)
@@ -138,8 +172,9 @@ async def calibrate_left():
 
 @router.post("/calibrate/right")
 async def calibrate_right():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     pulses = state.controller.set_right_limit()
     cm = state.controller.pulses_to_cm(pulses)
@@ -149,8 +184,9 @@ async def calibrate_right():
 
 @router.post("/calibrate/compute_center")
 async def calibrate_compute_center():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     result = state.controller.compute_center()
     if result["center"] == 0 and result["left"] == 0 and result["right"] == 0:
@@ -168,8 +204,9 @@ async def calibrate_compute_center():
 
 @router.post("/calibrate/move_to_center")
 async def calibrate_move_to_center():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     if state.controller.rail_center_pulses == 0 and state.controller.rail_left_pulses != 0:
         state.controller.compute_center()
@@ -181,8 +218,9 @@ async def calibrate_move_to_center():
 
 @router.post("/calibrate/apply")
 async def calibrate_apply():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     limit_pulses = state.calibration_pulses
     limit_cm = state.calibration_cm
@@ -195,8 +233,9 @@ async def calibrate_apply():
 
 @router.post("/calibrate/reset")
 async def calibrate_reset():
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     _stop_all_threads()
     state.controller.reset_encoder()
     state.controller.pos_limit_pulses = 5000
@@ -212,8 +251,9 @@ async def calibrate_reset():
 
 @router.post("/move/start")
 async def move_start(req: MoveRequest):
-    if not state.controller.is_connected():
-        return JSONResponse(status_code=400, content={"error": "Serial no conectado"})
+    err = check_serial()
+    if err:
+        return JSONResponse(status_code=400, content=err)
     voltage = abs(req.voltage)
     if req.direction == "right":
         voltage = -voltage
@@ -267,11 +307,14 @@ async def websocket_endpoint(ws: WebSocket):
                 action = cmd.get("action")
 
                 if action == "set_controller":
-                    state.current_controller_type = cmd.get("controller", "LQR")
+                    gains = cmd.get("gains")
+                    if gains is not None and len(gains) != 4:
+                        gains = None
+                    control_dispatcher.set_controller(cmd.get("controller", "LQR"), gains)
                 elif action == "set_gains":
                     gains = cmd.get("gains", [])
                     if len(gains) == 4:
-                        state.controller.K = gains
+                        control_dispatcher.set_gains(gains)
 
             except json.JSONDecodeError:
                 pass

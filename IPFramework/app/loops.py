@@ -2,7 +2,8 @@ import math
 import time
 import threading
 
-from .state import state, ws_broadcast
+from .states import state, ws_broadcast
+from . import control
 
 # ── Monitor loop ────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ def _control_loop_lqr():
     ctrl = state.controller
     ctrl.send_center()
     time.sleep(2)
-    ctrl.reset_startup()
+    control.reset_startup()
     state.run_start_time = time.time()
     recovering = False
     recovery_start = 0
@@ -90,12 +91,12 @@ def _control_loop_lqr():
                 elapsed = time.time() - recovery_start
                 if elapsed > 4.0:
                     ctrl.send_stop_motor()
-                    ctrl.reset_startup()
+                    control.reset_startup()
                     state.run_start_time = time.time()
                     recovering = False
 
             if not recovering:
-                u = ctrl.compute_control()
+                u = control.compute_control(ctrl.state, ctrl.pos_limit_pulses, ctrl.is_calibrated())
                 ctrl.send_voltage(u)
 
             t = time.time() - state.run_start_time
