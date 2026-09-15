@@ -56,7 +56,9 @@ async def health():
         "running": state.is_running,
         "monitoring": state.is_monitoring,
         "controller": control_dispatcher.get_current_type(),
+        "gains": control_dispatcher.get_gains(),
         "calibration": {
+            "calibrated": ctrl.is_calibrated() if ctrl else False,
             "left_pulses": ctrl.rail_left_pulses if ctrl else 0,
             "right_pulses": ctrl.rail_right_pulses if ctrl else 0,
             "center_pulses": ctrl.rail_center_pulses if ctrl else 0,

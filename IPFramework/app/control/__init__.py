@@ -66,6 +66,11 @@ def set_gains(gains):
     get_controller().set_gains(gains)
 
 
+def get_gains() -> list:
+    """Devuelve las ganancias actualmente configuradas para el controlador."""
+    return list(get_controller().K)
+
+
 def compute_control(state: dict, pos_limit_pulses: float, calibrated: bool = True) -> float:
     return get_controller().compute_control(state, pos_limit_pulses, calibrated)
 

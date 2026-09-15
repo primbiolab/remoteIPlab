@@ -3,6 +3,8 @@ class PendulumApp {
     this.ws = null;
     this.isRunning = false;
     this.isMonitoring = false;
+    this.serialConnected = false;
+    this._gainsSynced = false;
     this.drawer = null;
     this.charts = {};
 
@@ -233,12 +235,25 @@ class PendulumApp {
       if (r.ok) {
         const d = await r.json();
         this.setConnected(true, d.connected ? "Serial" : "OK");
-        if (d.calibration && d.calibration.limit_pulses) {
+        if (d.calibration && d.calibration.calibrated) {
+          this.calibrated = true;
           this._defaultPosLimitPulses = d.calibration.limit_pulses;
           const posLimit = this._defaultPosLimitCm();
           ["posChart", "pPosChart"].forEach((id) => {
             const ch = this.charts[id];
             if (ch) { ch.minY = -posLimit; ch.maxY = posLimit; }
+          });
+          if (this.calibLimitVal && this.calibLimitVal.textContent === "—") {
+            this.calibLimitVal.textContent = d.calibration.limit_pulses.toFixed(0);
+          }
+        } else if (d.calibration) {
+          this.calibrated = false;
+        }
+        if (Array.isArray(d.gains) && d.gains.length === 4 && !this._gainsSynced) {
+          this._gainsSynced = true;
+          ["k0", "k1", "k2", "k3"].forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (el) el.value = d.gains[i];
           });
         }
         if (d.monitoring && !this.isMonitoring) {
@@ -264,6 +279,18 @@ class PendulumApp {
     const text = this.connectionStatus.querySelector(".status-text");
     if (ok) { dot.style.background = "var(--green)"; text.textContent = `Conectado — ${mode || "Online"}`; }
     else { dot.style.background = "var(--red)"; text.textContent = "Desconectado"; }
+    this.serialConnected = ok && mode === "Serial";
+    this._updateMonitorAvailability();
+  }
+
+  _updateMonitorAvailability() {
+    if (!this.monitorBtn) return;
+    let enabled = false;
+    if (!this.isRunning && (this.isMonitoring || this.serialConnected)) enabled = true;
+    this.monitorBtn.disabled = !enabled;
+    this.monitorBtn.title = enabled
+      ? ""
+      : "Haz clic en Conectar serial (Arduino) para habilitar el monitoreo.";
   }
 
   async scanPorts() {
@@ -416,7 +443,7 @@ class PendulumApp {
 
     if (this.pauseGraphs && this.pauseGraphs.checked) return;
 
-    if (data.pos_limit_pulses != null && data.pos_limit_pulses !== this._lastPosLimitPulses) {
+    if (data.pos_limit_pulses != null && data.pos_limit_pulses !== this._lastPosLimitPulses && this.calibrated) {
       this._lastPosLimitPulses = data.pos_limit_pulses;
       const posLimit = this._pulsesToCm(data.pos_limit_pulses);
       ["posChart", "pPosChart"].forEach((id) => {
@@ -482,10 +509,11 @@ class PendulumApp {
       try {
         await fetch(`${this.backendUrl}/calibrate/reset`, { method: "POST" });
       } catch {}
+      this.calibrated = false;
       this.calibLeftVal.textContent = "—";
       this.calibRightVal.textContent = "—";
       this.calibCenterVal.textContent = "—";
-      this.calibLimitVal.textContent = "5000";
+      this.calibLimitVal.textContent = "—";
       this.calibApplyBtn.disabled = true;
     }
 
@@ -500,6 +528,7 @@ class PendulumApp {
       try {
         const d = await this._apiPost("/calibrate/left");
         this.calibLeftVal.textContent = d.pulses.toFixed(0);
+        if (this.calibRightVal.textContent !== "—") this.calibrated = true;
         this.calibApplyBtn.disabled = true;
       } catch (e) {
         alert("Extremo Izquierdo: " + e.message);
@@ -510,6 +539,7 @@ class PendulumApp {
       try {
         const d = await this._apiPost("/calibrate/right");
         this.calibRightVal.textContent = d.pulses.toFixed(0);
+        if (this.calibLeftVal.textContent !== "—") this.calibrated = true;
         this.calibApplyBtn.disabled = true;
       } catch (e) {
         alert("Extremo Derecho: " + e.message);

@@ -7,7 +7,7 @@ Por ahora solo existe LQR, por lo que este archivo contiene sus ganancias.
 """
 import math
 
-LQR_GAINS = [1600.0, 140.0, -13.0, -7.5]
+LQR_GAINS = [2110.0, 470, 50, 26.5]
 
 LQR_PARAMS = {
     "k_swingup": 1.5,

@@ -167,6 +167,21 @@ void loop() {
       usePositionControl = true;
       desiredPosition = railCenter;
       Serial.println("H_OK");
+    } else if (cmd == 'A') {
+      // Apply calibration: center pasa a ser 0 y los extremos quedan simétricos
+      long offset = railCenter;
+      motorPosition -= offset;
+      lastMotorPosition = motorPosition;
+      railLeftLimit -= offset;
+      railRightLimit -= offset;
+      railCenter = 0;
+      desiredPosition = 0;
+      usePositionControl = false;
+      voltageOutput = 0;
+      for (int j = 0; j < bufferSize; j++) {
+        motorPositionBuffer[j] = motorPosition;
+      }
+      Serial.println("A_OK");
     } else {
       parseCommand(input);
     }
@@ -180,7 +195,7 @@ void loop() {
       output = 0;
     } else {
       long activeLimit = FALLBACK_LIMIT;
-      if (railLeftLimit != 0 || railRightLimit != 0) {
+      if (railLeftLimit != 0 && railRightLimit != 0) {
         activeLimit = max(abs(railLeftLimit), abs(railRightLimit));
       }
       int pwm = map(abs(positionError), positionTolerance, activeLimit, 60, 255);
@@ -198,8 +213,8 @@ void loop() {
     output = voltageOutput;
   }
 
-  // Soft limits con recuperación al centro (solo activos tras calibrar)
-  if (railLeftLimit != 0 || railRightLimit != 0) {
+  // Soft limits con recuperación al centro (solo tras fijar AMBOS extremos)
+  if (railLeftLimit != 0 && railRightLimit != 0) {
     if (motorPosition < railLeftLimit) {
       output = INVERT_MOTOR_DIRECTION ? -170 : 170;
     } else if (motorPosition > railRightLimit) {

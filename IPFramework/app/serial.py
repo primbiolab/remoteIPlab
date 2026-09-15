@@ -207,13 +207,14 @@ class SerialController:
         return abs(self.state["raw_pulses"] - self.rail_center_pulses) <= tolerance
 
     def is_calibrated(self) -> bool:
-        """Indica si ya se fijaron los extremos del riel (E/D)."""
-        return self.rail_left_pulses != 0 or self.rail_right_pulses != 0
+        """Indica si la calibración real está completa (ambos extremos E y D)."""
+        return self.rail_left_pulses != 0 and self.rail_right_pulses != 0
 
     def is_out_of_limits(self) -> bool:
         return self.is_calibrated() and abs(self.state["raw_pulses"]) > self.pos_limit_pulses
 
     def apply_calibration(self) -> bool:
+        self.read_state()
         if not self.is_at_center():
             raise RuntimeError(
                 f"El carro no está en el centro (error: "
