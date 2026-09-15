@@ -1,9 +1,18 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PRIMBIO — Péndulo Invertido</title>
+  <script>
+    (function() {
+      var t = localStorage.getItem('primbio-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,12 +21,13 @@
     <div class="sidebar-content">
       <button class="toggle-btn" id="toggleBtn">☰</button>
       <nav class="nav-menu">
-        <button class="nav-btn active" data-page="home"><span class="nav-icon">⌂</span><span class="nav-text">Home</span></button>
-        <button class="nav-btn" data-page="pendulum"><span class="nav-icon">⟳</span><span class="nav-text">Péndulo</span></button>
+        <!-- <button class="nav-btn active" data-page="home"><span class="nav-icon">⌂</span><span class="nav-text">Home</span></button> -->
+        <button class="nav-btn active" data-page="pendulum"><span class="nav-icon">⟳</span><span class="nav-text">Péndulo</span></button>
         <button class="nav-btn" data-page="graphs"><span class="nav-icon">⬡</span><span class="nav-text">Gráficas</span></button>
 
       </nav>
       <div class="sidebar-footer">
+        <button class="theme-toggle" id="themeToggle"><span class="theme-icon">☾</span><span class="nav-text">Oscuro</span></button>
         <button class="nav-btn exit-btn" id="exitBtn"><span class="nav-icon">⏻</span><span class="nav-text">Salir</span></button>
       </div>
     </div>
@@ -25,7 +35,7 @@
 
   <main class="main-content">
     <!-- Home -->
-    <div class="page" id="homePage">
+    <!-- <div class="page" id="homePage">
       <h1 class="page-title">PRIMBIO</h1>
       <p class="page-subtitle">Plataforma de Control de Péndulo Invertido</p>
       <div class="welcome-card">
@@ -39,12 +49,12 @@
           <div class="feature-item"><span class="feature-icon">⚡</span><span>Control LQR + Swing-up</span></div>
         </div>
       </div>
-    </div>
+    </div> -->
 
     <!-- Pendulum (with integrated config + graphs + serial) -->
-    <div class="page hidden" id="pendulumPage">
+    <div class="page" id="pendulumPage">
       <div class="page-header">
-        <h1 class="page-title">Péndulo Invertido</h1>
+        <h1 class="page-title">Péndulo Invertido - PRIMBIO</h1>
         <p class="page-subtitle">Control, visualización y gráficas en tiempo real</p>
       </div>
 
@@ -239,6 +249,7 @@
 </div>
 <script src="pendulum-sim.js"></script>
 <script src="charts.js"></script>
-<script src="app.js"></script>
+<!-- <script src="app.js"></script> -->
+<script src="app.js?v=2"></script>
 </body>
 </html>

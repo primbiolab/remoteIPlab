@@ -7,6 +7,27 @@ class PendulumDrawer {
     window.addEventListener("resize", () => this.setupCanvas());
   }
 
+  cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  colors() {
+    return {
+      bg: this.cssVar("--canvas-bg", "#0f0e0c"),
+      panel: this.cssVar("--canvas-panel", "#1c1a16"),
+      surface: this.cssVar("--canvas-surface", "#2a2520"),
+      overlay: this.cssVar("--canvas-overlay", "#3d3830"),
+      muted: this.cssVar("--canvas-muted", "#7a7268"),
+      fg: this.cssVar("--canvas-fg", "#f0ece4"),
+      accent: this.cssVar("--accent", "#e0571c"),
+      green: this.cssVar("--green", "#3f9468"),
+      red: this.cssVar("--red", "#e0573f"),
+      peach: this.cssVar("--peach", "#e0a020"),
+      yellow: this.cssVar("--yellow", "#e0a020"),
+    };
+  }
+
   setupCanvas() {
     const rect = this.canvas.parentElement.getBoundingClientRect();
     const w = Math.max(Math.floor(rect.width - 24), 100);
@@ -25,11 +46,7 @@ class PendulumDrawer {
     const w = this.W, h = this.H;
     ctx.clearRect(0, 0, w, h);
 
-    const colors = {
-      bg: "#1e1e2e", panel: "#262637", surface: "#313244", overlay: "#45475a",
-      muted: "#6c7086", fg: "#cdd6f4", accent: "#89b4fa", green: "#a6e3a1",
-      red: "#f38ba8", peach: "#fab387", yellow: "#f9e2af",
-    };
+    const cols = this.colors();
 
     const margin = 50;
     const trackL = margin, trackR = w - margin, trackW = trackR - trackL;
@@ -49,18 +66,18 @@ class PendulumDrawer {
 
     ctx.save();
 
-    ctx.fillStyle = colors.bg;
+    ctx.fillStyle = cols.bg;
     ctx.fillRect(0, 0, w, h);
 
     ctx.beginPath();
-    ctx.strokeStyle = colors.overlay;
+    ctx.strokeStyle = cols.overlay;
     ctx.lineWidth = 2;
     ctx.moveTo(trackL, cartY + cartH + 12);
     ctx.lineTo(trackR, cartY + cartH + 12);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = colors.surface;
+    ctx.strokeStyle = cols.surface;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.moveTo(trackL, cartY + cartH + 8);
@@ -72,7 +89,7 @@ class PendulumDrawer {
     const limitFrac = Math.min(1, limitPx / 5000);
     const limitLeftPx = trackL + (1 - limitFrac) / 2 * trackW;
     const limitRightPx = trackR - (1 - limitFrac) / 2 * trackW;
-    ctx.strokeStyle = colors.yellow;
+    ctx.strokeStyle = cols.yellow;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 4]);
     ctx.beginPath();
@@ -85,14 +102,14 @@ class PendulumDrawer {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = '9px "JetBrains Mono", monospace';
-    ctx.fillStyle = colors.yellow;
+    ctx.fillStyle = cols.yellow;
     ctx.fillText(`Límite: ${limitPx} pulsos`, trackL, cartY + cartH + 40);
 
     ctx.fillStyle = "rgba(0,0,0,0.25)";
     ctx.fillRect(cartX + 2, cartY + 2, cartW, cartH);
 
-    ctx.fillStyle = colors.panel;
-    ctx.strokeStyle = colors.surface;
+    ctx.fillStyle = cols.panel;
+    ctx.strokeStyle = cols.surface;
     ctx.lineWidth = 1.5;
     const rad = 4;
     ctx.beginPath();
@@ -118,8 +135,8 @@ class PendulumDrawer {
     ctx.arc(cartX + cartW * 0.78 + 1, cartY + cartH + wr + 1, wr, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.fillStyle = colors.overlay;
-    ctx.strokeStyle = colors.surface;
+    ctx.fillStyle = cols.overlay;
+    ctx.strokeStyle = cols.surface;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cartX + cartW * 0.22, cartY + cartH + wr, wr, 0, 2 * Math.PI);
@@ -130,7 +147,7 @@ class PendulumDrawer {
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = colors.panel;
+    ctx.fillStyle = cols.panel;
     ctx.beginPath();
     ctx.arc(cartX + cartW * 0.22, cartY + cartH + wr, 3, 0, 2 * Math.PI);
     ctx.fill();
@@ -148,8 +165,8 @@ class PendulumDrawer {
     ctx.shadowColor = "rgba(0,0,0,0.2)";
     ctx.shadowBlur = 4;
     const grad = ctx.createLinearGradient(pivotX, pivotY, bobX, bobY);
-    grad.addColorStop(0, colors.accent);
-    grad.addColorStop(1, colors.fg);
+    grad.addColorStop(0, cols.accent);
+    grad.addColorStop(1, cols.fg);
     ctx.beginPath();
     ctx.strokeStyle = grad;
     ctx.lineWidth = 3.5;
@@ -158,11 +175,11 @@ class PendulumDrawer {
     ctx.stroke();
 
     ctx.shadowBlur = 2;
-    ctx.fillStyle = colors.accent;
+    ctx.fillStyle = cols.accent;
     ctx.beginPath();
     ctx.arc(pivotX, pivotY, 5, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.strokeStyle = colors.fg;
+    ctx.strokeStyle = cols.fg;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(pivotX, pivotY, 7, 0, 2 * Math.PI);
@@ -170,14 +187,14 @@ class PendulumDrawer {
 
     const bobR = Math.max(10, Math.min(14, rodLen * 0.12));
     const rg = ctx.createRadialGradient(bobX - 2, bobY - 2, 2, bobX, bobY, bobR);
-    rg.addColorStop(0, colors.peach);
-    rg.addColorStop(1, "#e67e22");
+    rg.addColorStop(0, cols.peach);
+    rg.addColorStop(1, "#c04a15");
     ctx.shadowBlur = 4;
     ctx.fillStyle = rg;
     ctx.beginPath();
     ctx.arc(bobX, bobY, bobR, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.strokeStyle = colors.overlay;
+    ctx.strokeStyle = cols.overlay;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(bobX, bobY, bobR, 0, 2 * Math.PI);
@@ -189,16 +206,16 @@ class PendulumDrawer {
     ctx.restore();
 
     ctx.font = '12px "JetBrains Mono", monospace';
-    ctx.fillStyle = colors.muted;
+    ctx.fillStyle = cols.muted;
     ctx.fillText(`Ángulo: ${angleDeg.toFixed(1)}°`, 12, 22);
     ctx.fillText(`Pos: ${pos.toFixed(3)}`, 12, 40);
     ctx.fillText(`Control: ${(data.action || 0).toFixed(2)} V`, 12, 58);
 
     const a = Math.abs(angleDeg);
     ctx.font = 'bold 13px "Segoe UI", sans-serif';
-    if (a < 10) { ctx.fillStyle = colors.green; ctx.fillText("✓ Estable", w - 90, 22); }
-    else if (a > 45) { ctx.fillStyle = colors.red; ctx.fillText("⚠ Inestable", w - 90, 22); }
-    else if (a > 20) { ctx.fillStyle = colors.yellow; ctx.fillText("⚡ Swing-up", w - 90, 22); }
+    if (a < 10) { ctx.fillStyle = cols.green; ctx.fillText("✓ Estable", w - 90, 22); }
+    else if (a > 45) { ctx.fillStyle = cols.red; ctx.fillText("⚠ Inestable", w - 90, 22); }
+    else if (a > 20) { ctx.fillStyle = cols.yellow; ctx.fillText("⚡ Swing-up", w - 90, 22); }
   }
   
 }

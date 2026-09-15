@@ -4,7 +4,8 @@ class RealtimeChart {
     this.ctx = canvas.getContext("2d");
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.maxPoints = opts.maxPoints || 300;
-    this.color = opts.color || "#89b4fa";
+    this.color = opts.color || "#e0571c";
+    this.cssColor = opts.cssColor || null;
     this.minY = opts.minY || -10;
     this.maxY = opts.maxY || 10;
     this.fixedHeight = opts.height || 180;
@@ -12,6 +13,21 @@ class RealtimeChart {
     this.data = [];
     this.paused = false;
     this.setupCanvas();
+  }
+
+  cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  colors() {
+    return {
+      bg: this.cssVar("--canvas-bg", "#0f0e0c"),
+      surface: this.cssVar("--canvas-surface", "#2a2520"),
+      overlay: this.cssVar("--canvas-overlay", "#3d3830"),
+      muted: this.cssVar("--canvas-muted", "#7a7268"),
+      fg: this.cssVar("--canvas-fg", "#f0ece4"),
+    };
   }
 
   setupCanvas() {
@@ -39,7 +55,7 @@ class RealtimeChart {
     const ctx = this.ctx, w = this.W, h = this.H;
     ctx.clearRect(0, 0, w, h);
 
-    const colors = { bg: "#1e1e2e", surface: "#313244", overlay: "#45475a", muted: "#6c7086", fg: "#cdd6f4" };
+    const colors = this.colors();
     ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, w, h);
 
@@ -68,10 +84,11 @@ class RealtimeChart {
 
     if (this.data.length < 2) { this.drawLabels(); return; }
 
+    const lineColor = this.cssColor ? this.cssVar(this.cssColor, this.color) : this.color;
     const stepX = plotW / (this.maxPoints - 1);
     const offsetX = plotW - this.data.length * stepX;
 
-    ctx.strokeStyle = this.color;
+    ctx.strokeStyle = lineColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < this.data.length; i++) {
@@ -91,7 +108,7 @@ class RealtimeChart {
 
   drawLabels() {
     const ctx = this.ctx, w = this.W, h = this.H;
-    const colors = { muted: "#6c7086" };
+    const colors = { muted: this.cssVar("--canvas-muted", "#7a7268") };
     const fs = this.compact ? '8px monospace' : '10px "JetBrains Mono", monospace';
     ctx.font = fs;
     ctx.fillStyle = colors.muted;

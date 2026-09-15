@@ -9,6 +9,7 @@ class PendulumApp {
     this.backendUrl = `http://${window.location.hostname}:8080`;
     this.wsUrl = `ws://${window.location.hostname}:8080/ws`;
 
+    
     this.initElements();
     this.initEvents();
     this.initCharts();
@@ -16,6 +17,7 @@ class PendulumApp {
     this.scanPorts();
     setInterval(() => this.checkBackend(), 10000);
     setInterval(() => this.scanPorts(), 5000);
+    this.navigate("pendulum"); 
   }
 
   initElements() {
@@ -76,6 +78,9 @@ class PendulumApp {
     this.cameraFeed = document.getElementById("cameraFeed");
     this.cameraOff = document.getElementById("cameraOff");
     this.cameraStream = null;
+
+    this.themeToggle = document.getElementById("themeToggle");
+    this._applyThemeUI();
   }
 
   initEvents() {
@@ -134,6 +139,8 @@ class PendulumApp {
 
     this.toggleCameraBtn.addEventListener("click", () => this.toggleCamera());
     this.cameraSelect.addEventListener("change", () => this.onCameraChange());
+
+    this.themeToggle.addEventListener("click", () => this.toggleTheme());
   }
 
   navigate(pageId) {
@@ -143,7 +150,7 @@ class PendulumApp {
     this.navBtns.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.page === pageId);
     });
-
+    
     if (pageId === "pendulum") {
       setTimeout(() => {
         const c = document.getElementById("pendulumCanvas");
@@ -192,25 +199,25 @@ class PendulumApp {
     const posLimit = this._defaultPosLimitCm();
 
     const full = [
-      { id: "posChart", color: "#89b4fa", min: -posLimit, max: posLimit },
-      { id: "angleChart", color: "#a6e3a1", min: -180, max: 180 },
-      { id: "actionChart", color: "#f38ba8", min: -12, max: 12 },
-      { id: "velChart", color: "#fab387", min: -5, max: 5 },
+      { id: "posChart", cssColor: "--accent", color: "#e0571c", min: -posLimit, max: posLimit },
+      { id: "angleChart", cssColor: "--green", color: "#3f9468", min: -180, max: 180 },
+      { id: "actionChart", cssColor: "--red", color: "#e0573f", min: -12, max: 12 },
+      { id: "velChart", cssColor: "--peach", color: "#e0a020", min: -5, max: 5 },
     ];
     full.forEach((cfg) => {
       const c = document.getElementById(cfg.id);
-      if (c) this.charts[cfg.id] = new RealtimeChart(c, { color: cfg.color, minY: cfg.min, maxY: cfg.max });
+      if (c) this.charts[cfg.id] = new RealtimeChart(c, { color: cfg.color, cssColor: cfg.cssColor, minY: cfg.min, maxY: cfg.max });
     });
 
     const compact = [
-      { id: "pPosChart", color: "#89b4fa", min: -posLimit, max: posLimit },
-      { id: "pAngleChart", color: "#a6e3a1", min: -180, max: 180 },
-      { id: "pActionChart", color: "#f38ba8", min: -12, max: 12 },
-      { id: "pVelChart", color: "#fab387", min: -5, max: 5 },
+      { id: "pPosChart", cssColor: "--accent", color: "#e0571c", min: -posLimit, max: posLimit },
+      { id: "pAngleChart", cssColor: "--green", color: "#3f9468", min: -180, max: 180 },
+      { id: "pActionChart", cssColor: "--red", color: "#e0573f", min: -12, max: 12 },
+      { id: "pVelChart", cssColor: "--peach", color: "#e0a020", min: -5, max: 5 },
     ];
     compact.forEach((cfg) => {
       const c = document.getElementById(cfg.id);
-      if (c) this.charts[cfg.id] = new RealtimeChart(c, { color: cfg.color, minY: cfg.min, maxY: cfg.max, compact: true });
+      if (c) this.charts[cfg.id] = new RealtimeChart(c, { color: cfg.color, cssColor: cfg.cssColor, minY: cfg.min, maxY: cfg.max, compact: true });
     });
   }
 
@@ -255,8 +262,8 @@ class PendulumApp {
   setConnected(ok, mode) {
     const dot = this.connectionStatus.querySelector(".status-dot");
     const text = this.connectionStatus.querySelector(".status-text");
-    if (ok) { dot.style.background = "#a6e3a1"; text.textContent = `Conectado — ${mode || "Online"}`; }
-    else { dot.style.background = "#f38ba8"; text.textContent = "Desconectado"; }
+    if (ok) { dot.style.background = "var(--green)"; text.textContent = `Conectado — ${mode || "Online"}`; }
+    else { dot.style.background = "var(--red)"; text.textContent = "Desconectado"; }
   }
 
   async scanPorts() {
@@ -390,6 +397,7 @@ class PendulumApp {
 
   updateUI(data) {
     if (!data) return;
+    this.lastData = data;
 
     if (data.event === "out_of_limits") {
       if (this.modeVal) this.modeVal.textContent = "RECUPERANDO";
@@ -433,7 +441,7 @@ class PendulumApp {
     const port = this.comPort.value;
     if (!port) {
       if (this.serialStatus) {
-        this.serialStatus.innerHTML = '<span style="color:#f9e2af">Selecciona un puerto</span>';
+        this.serialStatus.innerHTML = '<span style="color:var(--yellow)">Selecciona un puerto</span>';
       }
       return;
     }
@@ -447,17 +455,17 @@ class PendulumApp {
       const d = await r.json();
       if (!r.ok) {
         if (this.serialStatus) {
-          this.serialStatus.innerHTML = `<span style="color:#f38ba8">✖ Error: ${d.error || "conexión fallida"}</span>`;
+          this.serialStatus.innerHTML = `<span style="color:var(--red)">✖ Error: ${d.error || "conexión fallida"}</span>`;
         }
         return;
       }
       if (this.serialStatus) {
-        this.serialStatus.innerHTML = `<span style="color:#a6e3a1">✔ Conectado a ${port} (${baud})</span>`;
+        this.serialStatus.innerHTML = `<span style="color:var(--green)">✔ Conectado a ${port} (${baud})</span>`;
       }
       this.checkBackend();
     } catch (e) {
       if (this.serialStatus) {
-        this.serialStatus.innerHTML = `<span style="color:#f38ba8">✖ Error: conexión fallida — ¿El servidor está corriendo?</span>`;
+        this.serialStatus.innerHTML = `<span style="color:var(--red)">✖ Error: conexión fallida — ¿El servidor está corriendo?</span>`;
       }
     }
   }
@@ -656,6 +664,25 @@ class PendulumApp {
       this.stopCamera();
       await this.initCamera();
     }
+  }
+
+  toggleTheme() {
+    const root = document.documentElement;
+    const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("primbio-theme", next);
+    this._applyThemeUI();
+
+    if (this.drawer) this.drawer.draw(this.lastData || { angle: 0, pos: 0, action: 0 });
+    Object.values(this.charts).forEach((ch) => ch && ch.draw());
+  }
+
+  _applyThemeUI() {
+    const theme = document.documentElement.getAttribute("data-theme");
+    const light = theme === "light";
+    if (!this.themeToggle) return;
+    this.themeToggle.querySelector(".theme-icon").textContent = light ? "☀" : "☾";
+    this.themeToggle.querySelector(".nav-text").textContent = light ? "Claro" : "Oscuro";
   }
 }
 
