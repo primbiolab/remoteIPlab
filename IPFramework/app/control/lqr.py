@@ -13,6 +13,7 @@ from . import config as ctrl_config
 
 class LQRController(BaseController):
     name = "LQR + Swing-up"
+    gain_labels = ["Kθ", "Kω", "Kp", "Kd"]
 
     def __init__(self):
         # Constantes físicas compartidas desde config.py
@@ -36,8 +37,8 @@ class LQRController(BaseController):
         self.startup_w_threshold = ctrl_config.LQR_PARAMS["startup_w_threshold"]
 
     def set_gains(self, gains):
-        if len(gains) != 4:
-            raise ValueError("Se necesitan exactamente 4 ganancias")
+        if len(gains) != len(self.gain_labels):
+            raise ValueError(f"Se necesitan exactamente {len(self.gain_labels)} ganancias")
         self.K = [float(g) for g in gains]
         ctrl_config.LQR_GAINS[:] = self.K
 

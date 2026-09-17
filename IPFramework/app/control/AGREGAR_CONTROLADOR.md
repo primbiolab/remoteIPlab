@@ -20,7 +20,9 @@ Arduino ──R\n──▶ hardware/serial.py ──state (dict)──▶ contro
   `core/loops.py` (`_control_loop`) funciona con cualquier controlador sin
   modificaciones.
 - El frontend lista los controladores automáticamente leyendo `/health`
-  (campo `controllers`), generado por `control.get_available()`.
+  (campos `controllers`, `gains` y `gain_labels`), generados por
+  `control.get_available()`, `control.get_gains()` y
+  `control.get_gain_labels()`.
 
 Para agregar un controlador nuevo NO hace falta tocar `hardware/serial.py`,
 `core/loops.py`, `web/routes.py` ni el frontend.
@@ -125,6 +127,9 @@ Atributos utilizados por el sistema:
 
 - `name: str` → nombre que se muestra en el frontend.
 - `K: list` → ganancias actuales (la usa `control.get_gains()`).
+- `gain_labels: list` → etiquetas de cada ganancia, en el mismo orden que `K`.
+  Define cuántos campos genera el panel de ganancias. Si está vacía, el
+  controlador no expone ganancias configurables.
 - `startup_delay: float = 2.0` → segundos que el bucle espera tras recentrar
   el carro en el arranque.
 - `prepare_start(hw)` (opcional sobrescribir) → secuencia previa al bucle.
@@ -173,7 +178,8 @@ _ALIASES = {
 Con esto el controlador:
 - Aparece automáticamente en el `<select>` del frontend (vía `/health`).
 - Es seleccionable por su clave (`pid`) o por cualquiera de sus aliases.
-- Su `K` se muestra y se puede editar desde el panel de ganancias.
+- Sus `gain_labels` generan dinámicamente los campos del panel de ganancias y
+  su `K` se muestra/edita en esos campos.
 
 ### Paso 4 — Verificar
 
@@ -198,6 +204,7 @@ from . import config as ctrl_config
 
 class PIDController(BaseController):
     name = "PID"
+    gain_labels = ["Kp", "Ki", "Kd"]
 
     def __init__(self):
         self.reload_config()
@@ -209,6 +216,8 @@ class PIDController(BaseController):
         self._integral = 0.0
 
     def set_gains(self, gains):
+        if len(gains) != len(self.gain_labels):
+            raise ValueError(f"Se necesitan exactamente {len(self.gain_labels)} ganancias")
         self.K = [float(g) for g in gains]
         ctrl_config.PID_GAINS[:] = self.K
 
@@ -235,10 +244,10 @@ class PIDController(BaseController):
 - **No toques `hardware/serial.py`, `core/loops.py` ni `web/routes.py`** para agregar un
   controlador. Todo lo específico de tu controlador vive en su archivo de
   `control/` y su registro en `control/__init__.py`.
-- **Ganancias del frontend:** actualmente el panel de ganancias envía
-  exactamente 4 valores (`k0..k3`). Si tu controlador necesita otro número,
-  ajusta su lectura en `set_gains` y ten en cuenta que `/gains` valida que
-  sean 4.
+- **Ganancias del frontend:** el panel se genera dinámicamente desde
+  `gain_labels`, en el mismo orden que `K`. `/gains` valida que la lista
+  recibida tenga exactamente `len(gain_labels)` valores. Si un controlador no
+  debe exponer ganancias, deja `gain_labels = []`.
 - **Estado interno:** si tu controlador acumula memoria (integral, filtros,
   contadores), reséñala en `reset_startup()`. Se llama al iniciar y tras cada
   recuperación de límites.

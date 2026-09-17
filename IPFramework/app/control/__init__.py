@@ -13,7 +13,7 @@ Cómo agregar un controlador nuevo:
     3. Añadir el bloque de configuración del controlador en
        control/config.py.
 """
-from . import lqr, base
+from . import lqr, base 
 
 # Registro de controladores disponibles: clave interna -> clase concreta.
 _REGISTRY = {
@@ -54,25 +54,41 @@ def get_current_type() -> str:
     return _current_name
 
 
+def _get_instance(key: str) -> base.BaseController:
+    """Devuelve (y cachea) la instancia del controlador registrado en `key`."""
+    inst = _instances.get(key)
+    if inst is None:
+        inst = _instances.setdefault(key, _REGISTRY[key]())
+    return inst
+
+
+def _validate_gains(ctrl: base.BaseController, gains):
+    expected = len(ctrl.gain_labels)
+    if expected == 0:
+        raise ValueError("El controlador no tiene ganancias configurables")
+    if not isinstance(gains, (list, tuple)) or len(gains) != expected:
+        raise ValueError(f"Se esperan exactamente {expected} ganancias")
+
+
 def set_controller(name: str, gains=None):
     """Aplica la selección del controlador y, si vienen, las ganancias."""
     global _current_key, _current_name
-    _current_name = name or _LABELS[_current_key]
-    _current_key = _resolve_key(_current_name)
-    _current_name = _LABELS[_current_key]
-    ctrl = get_controller()
+    key = _resolve_key(name or _current_name)
+    ctrl = _get_instance(key)
+    if gains is not None:
+        _validate_gains(ctrl, gains)
+
+    _current_key = key
+    _current_name = _LABELS[key]
     ctrl.reload_config()
-    if gains:
+    if gains is not None:
         ctrl.set_gains(gains)
     return ctrl
 
 
 def get_controller() -> base.BaseController:
     """Devuelve la instancia activa del controlador seleccionado."""
-    inst = _instances.get(_current_key)
-    if inst is None:
-        inst = _instances.setdefault(_current_key, _REGISTRY[_current_key]())
-    return inst
+    return _get_instance(_current_key)
 
 
 def get_available() -> list:
@@ -85,12 +101,23 @@ def get_available() -> list:
 
 
 def set_gains(gains):
-    get_controller().set_gains(gains)
+    """Aplica ganancias al controlador activo validando su cantidad."""
+    ctrl = get_controller()
+    _validate_gains(ctrl, gains)
+    ctrl.set_gains(gains)
 
 
 def get_gains() -> list:
     """Devuelve las ganancias actualmente configuradas para el controlador."""
     return list(get_controller().K)
+
+
+def get_gain_labels() -> list:
+    """Devuelve las etiquetas de las ganancias del controlador activo.
+
+    Lista vacía si el controlador no expone ganancias configurables.
+    """
+    return list(get_controller().gain_labels)
 
 
 def compute_control(state: dict, pos_limit_pulses: float, calibrated: bool = True) -> float:

@@ -1,10 +1,10 @@
 """Interfaz común de los controladores.
 
 Todos los controladores de la carpeta control/ deben heredar de
-BaseController y cumplir este contrato. control.py (el dispatcher)
+BaseController y cumplir este contrato. control/__init__.py (el dispatcher)
 interactúa con cualquier controlador únicamente a través de esta interfaz,
 por lo que agregar un controlador nuevo no requiere tocar el dispatcher
-salvo registrarlo (ver control.py).
+salvo registrarlo (ver control/__init__.py).
 """
 from abc import ABC, abstractmethod
 import time
@@ -15,6 +15,8 @@ class BaseController(ABC):
 
     Atributos esperados:
         K: lista de ganancias actuales (usada por control.get_gains()).
+        gain_labels: nombres mostrados en el frontend para cada ganancia de K.
+            Si está vacía, el controlador no expone ganancias configurables.
         startup_delay: segundos que el bucle espera tras recentrar el carro
             en el arranque.
     """
@@ -22,6 +24,8 @@ class BaseController(ABC):
     name: str = "Base"
 
     K: list = []
+
+    gain_labels: list = []
 
     startup_delay: float = 2.0
 

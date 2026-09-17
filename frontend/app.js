@@ -4,7 +4,6 @@ class PendulumApp {
     this.isRunning = false;
     this.isMonitoring = false;
     this.serialConnected = false;
-    this._gainsSynced = false;
     this.drawer = null;
     this.charts = {};
 
@@ -69,6 +68,9 @@ class PendulumApp {
     this.exportCsvBtn = document.getElementById("exportCsvBtn");
     this.pauseGraphs = document.getElementById("pauseGraphs");
 
+    this.gainsTitle = document.getElementById("gainsTitle");
+    this.gainsFields = document.getElementById("gainsFields");
+    this.gainsActions = document.getElementById("gainsActions");
     this.applyGainsBtn = document.getElementById("applyGainsBtn");
 
     this.moveLeftBtn = document.getElementById("moveLeftBtn");
@@ -115,17 +117,19 @@ class PendulumApp {
     this.exportCsvBtn.addEventListener("click", () => this.exportData());
 
     const applyGains = () => {
-      const gains = ["k0", "k1", "k2", "k3"].map((id) => parseFloat(document.getElementById(id).value));
+      const inputs = this.gainsFields
+        ? Array.from(this.gainsFields.querySelectorAll("input[data-gain-index]"))
+        : [];
+      const gains = inputs.map((el) => parseFloat(el.value));
+      if (!gains.length) return;
       if (gains.some(isNaN)) return alert("Ganancias inválidas");
       this.wsSend({ action: "set_gains", gains });
       this._showConfirmation("applyGainsToast", "Ganancias enviadas");
     };
-    this.applyGainsBtn.addEventListener("click", applyGains);
+    if (this.applyGainsBtn) this.applyGainsBtn.addEventListener("click", applyGains);
 
     if (this.controlType) {
-      this.controlType.addEventListener("change", () => {
-        this.wsSend({ action: "set_controller", controller: this.controlType.value });
-      });
+      this.controlType.addEventListener("change", () => this._onControllerChange(this.controlType.value));
     }
 
     // Direction buttons: press & hold
@@ -251,16 +255,10 @@ class PendulumApp {
         } else if (d.calibration) {
           this.calibrated = false;
         }
-        if (Array.isArray(d.gains) && d.gains.length === 4 && !this._gainsSynced) {
-          this._gainsSynced = true;
-          ["k0", "k1", "k2", "k3"].forEach((id, i) => {
-            const el = document.getElementById(id);
-            if (el) el.value = d.gains[i];
-          });
-        }
         if (Array.isArray(d.controllers) && d.controllers.length) {
           this._populateControllers(d.controllers);
         }
+        this._syncGains(d);
         if (d.monitoring && !this.isMonitoring) {
           this.isMonitoring = true;
           this.monitorBtn.textContent = "⏹ Detener Monitoreo";
@@ -330,11 +328,21 @@ class PendulumApp {
   wsSend(cmd) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(cmd));
-    } else {
+      return;
+    }
+
+    const headers = { "Content-Type": "application/json" };
+    if (cmd.action === "set_gains") {
+      fetch(`${this.backendUrl}/gains`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ gains: cmd.gains }),
+      }).catch(() => {});
+    } else if (cmd.action === "set_controller") {
       fetch(`${this.backendUrl}/controller`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ controller: cmd.controller || "LQR", gains: cmd.gains }),
+        headers,
+        body: JSON.stringify({ controller: cmd.controller, gains: cmd.gains }),
       }).catch(() => {});
     }
   }
@@ -355,6 +363,70 @@ class PendulumApp {
     if (current && list.some((c) => c.key === current)) {
       this.controlType.value = current;
     }
+  }
+
+  _renderGainFields(labels) {
+    if (!this.gainsFields) return;
+    const fingerprint = labels.join("|");
+    if (fingerprint === this._gainLabelsFingerprint) return;
+
+    this._gainLabelsFingerprint = fingerprint;
+    this.gainsFields.innerHTML = "";
+    labels.forEach((label, i) => {
+      const group = document.createElement("div");
+      group.className = "control-group";
+
+      const lab = document.createElement("label");
+      lab.textContent = label;
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "any";
+      input.style.width = "70px";
+      input.dataset.gainIndex = String(i);
+
+      group.appendChild(lab);
+      group.appendChild(input);
+      this.gainsFields.appendChild(group);
+    });
+  }
+
+  _setGainValues(values) {
+    if (!this.gainsFields || !Array.isArray(values)) return;
+    this.gainsFields.querySelectorAll("input[data-gain-index]").forEach((input) => {
+      const i = Number(input.dataset.gainIndex);
+      if (Number.isFinite(i) && i < values.length && document.activeElement !== input) {
+        input.value = values[i];
+      }
+    });
+  }
+
+  _syncGains(d) {
+    const key = this.controlType ? this.controlType.value : "";
+    if (key === this._gainsControllerKey) return;
+
+    this._gainsControllerKey = key;
+    const labels = Array.isArray(d.gain_labels) ? d.gain_labels : [];
+    const hasGains = labels.length > 0;
+    this._renderGainFields(labels);
+    this._setGainValues(Array.isArray(d.gains) ? d.gains : []);
+
+    if (this.gainsTitle) {
+      const selected = this.controlType?.selectedOptions?.[0]?.textContent || d.controller || "";
+      this.gainsTitle.textContent = hasGains ? `Ganancias ${selected}`.trim() : "Sin ganancias configurables";
+    }
+    if (this.gainsActions) this.gainsActions.style.display = hasGains ? "" : "none";
+  }
+
+  async _onControllerChange(key) {
+    try {
+      await fetch(`${this.backendUrl}/controller`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ controller: key }),
+      });
+    } catch {}
+    await this.checkBackend();
   }
 
   connectWs() {

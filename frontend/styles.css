@@ -401,6 +401,7 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--fg); o
   letter-spacing: 0.15em;
 }
 .direction-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.gains-fields { display: contents; }
 .direction-controls .control-group { display: flex; align-items: center; gap: 6px; }
 .direction-controls .control-group input { width: 70px; }
 .btn-direction {

@@ -58,6 +58,7 @@ async def health():
         "controller": control_dispatcher.get_current_type(),
         "controllers": control_dispatcher.get_available(),
         "gains": control_dispatcher.get_gains(),
+        "gain_labels": control_dispatcher.get_gain_labels(),
         "calibration": {
             "calibrated": ctrl.is_calibrated() if ctrl else False,
             "left_pulses": ctrl.rail_left_pulses if ctrl else 0,
@@ -146,17 +147,19 @@ async def stop_control():
 
 @router.post("/controller")
 async def set_controller(req: ControllerRequest):
-    gains = None
-    if req.gains is not None and len(req.gains) == 4:
-        gains = req.gains
-    control_dispatcher.set_controller(req.controller, gains)
-    return {"status": "ok", "controller": req.controller}
+    gains = req.gains if isinstance(req.gains, list) else None
+    try:
+        control_dispatcher.set_controller(req.controller, gains)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    return {"status": "ok", "controller": control_dispatcher.get_current_type()}
 
 @router.post("/gains")
 async def set_gains(req: GainsRequest):
-    if len(req.gains) != 4:
-        return JSONResponse(status_code=400, content={"error": "Se necesitan exactamente 4 ganancias"})
-    control_dispatcher.set_gains(req.gains)
+    try:
+        control_dispatcher.set_gains(req.gains)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
     return {"status": "ok", "gains": req.gains}
 
 # ── Calibration ─────────────────────────────────────────────────
@@ -311,13 +314,19 @@ async def websocket_endpoint(ws: WebSocket):
 
                 if action == "set_controller":
                     gains = cmd.get("gains")
-                    if gains is not None and len(gains) != 4:
+                    if not isinstance(gains, list):
                         gains = None
-                    control_dispatcher.set_controller(cmd.get("controller", "LQR"), gains)
+                    try:
+                        control_dispatcher.set_controller(cmd.get("controller", "LQR"), gains)
+                    except ValueError:
+                        pass
                 elif action == "set_gains":
-                    gains = cmd.get("gains", [])
-                    if len(gains) == 4:
-                        control_dispatcher.set_gains(gains)
+                    gains = cmd.get("gains")
+                    if isinstance(gains, list):
+                        try:
+                            control_dispatcher.set_gains(gains)
+                        except ValueError:
+                            pass
 
             except json.JSONDecodeError:
                 pass
