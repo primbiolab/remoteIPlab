@@ -1,9 +1,7 @@
-import math
 import time
-import threading
 
 from .states import state, ws_broadcast
-from . import control
+from .. import control
 
 # ── Monitor loop ────────────────────────────────────────────────
 
@@ -14,7 +12,7 @@ def _monitor_loop():
     recovery_start = 0
 
     while not state.stop_event.is_set():
-        if ctrl.read_state_monitor():
+        if ctrl.read_state():
             if ctrl.is_out_of_limits() and not recovering:
                 recovering = True
                 recovery_start = time.time()

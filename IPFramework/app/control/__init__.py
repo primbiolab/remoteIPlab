@@ -1,30 +1,19 @@
 """Selección del controlador (dispatcher).
 
-Único archivo responsable de garantizar que la selección del "Controlador"
-hecha en el frontend se aplique de verdad: resuelve el nombre elegido a un
-controlador registrado y delega el cálculo de la ley de control al archivo
-correspondiente de la carpeta control/.
+Paquete de controladores. Este __init__.py garantiza que la selección del
+"Controlador" hecha en el frontend se aplique de verdad: resuelve el nombre
+elegido a un controlador registrado y delega el cálculo de la ley de control
+al módulo correspondiente de este mismo paquete.
 
 Cómo agregar un controlador nuevo:
     1. Crear control/<nombre>.py con una clase que herede de BaseController
        (ver control/base.py) e implemente su contrato.
     2. Registrar la clase en _REGISTRY y sus nombres/alias de frontend en
-       _ALIASES (control.py). El dispatcher no requiere más cambios.
+       _ALIASES (este archivo). El dispatcher no requiere más cambios.
     3. Añadir el bloque de configuración del controlador en
        control/config.py.
-
-Nota de estructura: el dispatcher vive en un módulo control.py que convive
-con la carpeta control/ (donde están los controladores). Como un paquete
-con __init__.py opacaría al módulo del mismo nombre, la carpeta control/ NO
-tiene __init__.py: aquí se expone su ruta mediante __path__, de modo que
-app.control.lqr y app.control.config sigan resolviendo a los archivos de la
-carpeta control/.
 """
-import os
-
-__path__ = [os.path.join(os.path.dirname(__file__), "control")]
-
-from app.control import lqr, base
+from . import lqr, base
 
 # Registro de controladores disponibles: clave interna -> clase concreta.
 _REGISTRY = {

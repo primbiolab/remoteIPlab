@@ -7,28 +7,30 @@ para mover el motor.
 ## Arquitectura (en resumen)
 
 ```
-Arduino ──R\n──▶ serial.py ──state (dict)──▶ control/<nombre>.py
-          ◀─0VV.VV\n── send_voltage() ◀──── (compute_control)
+Arduino ──R\n──▶ hardware/serial.py ──state (dict)──▶ control/<nombre>.py
+          ◀─0VV.VV\n── send_voltage() ◀─────────────── (compute_control)
 ```
 
-- `serial.py` es el ÚNICO archivo que habla con el Arduino (lectura de estado,
-  envío de voltaje, calibración). No contiene lógica de control.
+- `hardware/serial.py` es el ÚNICO archivo que habla con el Arduino (lectura
+  de estado, envío de voltaje, calibración). No contiene lógica de control.
 - Cada controlador vive en su propio archivo dentro de `control/` y hereda de
-  `BaseController` (ver `base.py`).
-- `control.py` (el dispatcher) resuelve qué controlador está activo y delega a
-  él todos los cálculos. El bucle genérico de control en `loops.py`
-  (`_control_loop`) funciona con cualquier controlador sin modificaciones.
+  `BaseController` (ver `control/base.py`).
+- `control/__init__.py` (el dispatcher) resuelve qué controlador está activo y
+  delega a él todos los cálculos. El bucle genérico de control en
+  `core/loops.py` (`_control_loop`) funciona con cualquier controlador sin
+  modificaciones.
 - El frontend lista los controladores automáticamente leyendo `/health`
   (campo `controllers`), generado por `control.get_available()`.
 
-Para agregar un controlador nuevo NO hace falta tocar `serial.py`,
-`loops.py`, `routes.py` ni el frontend.
+Para agregar un controlador nuevo NO hace falta tocar `hardware/serial.py`,
+`core/loops.py`, `web/routes.py` ni el frontend.
 
 ---
 
 ## 1. Cómo se recibe la salida del Arduino
 
-La lectura de estado ocurre en `serial.py` (`read_state`). El protocolo es:
+La lectura de estado ocurre en `hardware/serial.py` (`read_state`). El
+protocolo es:
 
 1. Python envía la línea `R\n` por el puerto serial.
 2. El Arduino responde UNA línea con 4 valores separados por coma:
@@ -74,7 +76,7 @@ y `is_out_of_limits()`.
 `compute_control(state, pos_limit_pulses, calibrated)` debe devolver UN número:
 el VOLTAJE a aplicar al motor, en voltios.
 
-El bucle lo pasa a `ctrl.send_voltage(u)` (`serial.py`), que envía al Arduino
+El bucle lo pasa a `ctrl.send_voltage(u)` (`hardware/serial.py`), que envía al Arduino
 una línea con el formato:
 
 ```
@@ -110,7 +112,7 @@ Reglas obligatorias:
 ### Paso 1 — Crear el archivo del controlador
 
 Crea `control/<nombre>.py` con una clase que herede de `BaseController`
-(ver `base.py`) y que implemente su contrato:
+(ver `control/base.py`) y que implemente su contrato:
 
 | Método (abstracto)      | Descripción |
 |--------------------------|-------------|
@@ -145,9 +147,9 @@ PID_PARAMS = {
 
 Tu clase lo leerá desde `reload_config()` (igual que hace `lqr.py`).
 
-### Paso 3 — Registrar el controlador en `control.py`
+### Paso 3 — Registrar el controlador en `control/__init__.py`
 
-En `control.py` registras la clase y sus nombres:
+En `control/__init__.py` (el dispatcher) registras la clase y sus nombres:
 
 ```python
 from app.control import lqr, base, pid  # ← importa tu módulo
@@ -230,9 +232,9 @@ class PIDController(BaseController):
 
 ## 5. Notas importantes
 
-- **No toques `serial.py`, `loops.py` ni `routes.py`** para agregar un
+- **No toques `hardware/serial.py`, `core/loops.py` ni `web/routes.py`** para agregar un
   controlador. Todo lo específico de tu controlador vive en su archivo de
-  `control/` y su registro en `control.py`.
+  `control/` y su registro en `control/__init__.py`.
 - **Ganancias del frontend:** actualmente el panel de ganancias envía
   exactamente 4 valores (`k0..k3`). Si tu controlador necesita otro número,
   ajusta su lectura en `set_gains` y ten en cuenta que `/gains` valida que

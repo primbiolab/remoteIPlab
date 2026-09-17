@@ -1,8 +1,8 @@
 """Controlador LQR (Clásico + Swing-up).
 
 Toda la lógica de control relacionada con LQR vive aquí en un único archivo.
-Recibe el estado medido por serial.py y devuelve el voltaje a aplicar.
-La selección del controlador la realiza control.py.
+Recibe el estado medido por hardware/serial.py y devuelve el voltaje a
+aplicar. La selección del controlador la realiza control/__init__.py.
 """
 import math
 

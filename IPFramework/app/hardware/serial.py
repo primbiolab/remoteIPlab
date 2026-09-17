@@ -9,7 +9,7 @@ import serial
 import time
 import threading
 
-from .config import MOTOR_PPR, SHAFT_R
+from ..settings import MOTOR_PPR, SHAFT_R
 
 
 class SerialController:
@@ -104,9 +104,6 @@ class SerialController:
 
         except ValueError:
             return False
-
-    def read_state_monitor(self) -> bool:
-        return self.read_state()
 
     # ── Command sending ───────────────────────────────────────────
 

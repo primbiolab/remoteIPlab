@@ -3,3 +3,5 @@ old/
 IPFramework/ino/ArduinoMega/
 .vscode/
 instrucciones.md
+__pycache__/
+*.pyc

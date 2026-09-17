@@ -5,10 +5,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import FRONTEND_DIR
-from .states import state
+from ..settings import FRONTEND_DIR
+from ..core.states import state
 from .routes import router
-from .loops import _clean_stop_and_close
+from ..core.loops import _clean_stop_and_close
 
 
 @asynccontextmanager

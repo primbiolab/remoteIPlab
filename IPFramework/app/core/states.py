@@ -9,7 +9,7 @@ import threading
 from typing import Optional, List, Dict
 from fastapi import WebSocket
 
-from .serial import SerialController
+from ..hardware.serial import SerialController
 
 
 class AppState:
@@ -59,10 +59,6 @@ def ws_broadcast(data: dict):
 
 def serial_connected() -> bool:
     return state.controller.is_connected()
-
-
-def is_idle() -> bool:
-    return not state.is_running
 
 
 def check_serial() -> dict:

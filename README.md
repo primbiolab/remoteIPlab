@@ -45,23 +45,31 @@ PRIMBIO/
 │   ├── app.js                  # Lógica principal de la aplicación
 │   ├── pendulum-sim.js         # Visualización Canvas del péndulo
 │   ├── charts.js               # Gráficas de telemetría en tiempo real
-│   └── api.js                  # Cliente API para comunicación con backend
+│   └── src/icon.png            # Ícono de la aplicación
 │
 ├── IPFramework/                 # Backend Python
 │   ├── app/
-│   │   ├── main.py             # Aplicación FastAPI
-│   │   ├── routes.py           # Endpoints REST
-│   │   ├── loops.py            # Bucles de control
-│   │   ├── serial_controller.py# Comunicación serial con Arduino
-│   │   ├── state.py            # Estado global del sistema
-│   │   ├── schemas.py          # Modelos Pydantic
-│   │   ├── config.py           # Configuración
-│   │   └── websocket.py        # Manejo de WebSocket
+│   │   ├── settings.py         # Rutas del servidor y constantes de hardware
+│   │   ├── core/               # Núcleo de ejecución
+│   │   │   ├── states.py       # Estado global, broadcast WS y chequeos
+│   │   │   └── loops.py        # Bucle de monitoreo y de control genérico
+│   │   ├── hardware/
+│   │   │   └── serial.py       # Comunicación serial con el Arduino
+│   │   ├── web/
+│   │   │   ├── main.py         # Aplicación FastAPI
+│   │   │   └── routes.py       # Endpoints REST y WebSocket
+│   │   └── control/            # Controladores
+│   │       ├── __init__.py     # Dispatcher: selección de controlador
+│   │       ├── base.py         # Interfaz BaseController
+│   │       ├── config.py       # Configuración de los controladores
+│   │       ├── lqr.py          # Controlador LQR + Swing-up
+│   │       └── AGREGAR_CONTROLADOR.md
+│   ├── ino/
+│   │   └── inverted_pendulum_arduino.ino  # Firmware Arduino
 │   ├── server.py               # Punto de entrada del servidor
-│   ├── requirements.txt        # Dependencias Python
-│   ├── inverted_pendulum_arduino.ino  # Firmware Arduino
-│   └── LICENSE                 # GPL-3.0
+│   └── requirements.txt        # Dependencias Python
 │
+├── LICENSE                     # GPL-3.0
 └── README.md
 ```
 
@@ -104,7 +112,7 @@ pip install -r requirements.txt
 
 ### 3. Flashear Arduino
 
-Abrir `inverted_pendulum_arduino.ino` en Arduino IDE y subir al microcontrolador.
+Abrir `IPFramework/ino/inverted_pendulum_arduino.ino` en Arduino IDE y subir al microcontrolador.
 
 ### 4. Ejecutar el servidor
 
@@ -133,7 +141,7 @@ Acceder a [http://localhost:8080](http://localhost:8080) en el navegador.
 
 ### Control
 
-1. Seleccionar el controlador: **LQR Clásico** o **LQR + Swing-up**
+1. Seleccionar el controlador: **LQR + Swing-up**
 2. Clic en **Ejecutar** para activar el control
 3. Ajustar ganancias (Kθ, Kω, Kp, Kd) en tiempo real
 

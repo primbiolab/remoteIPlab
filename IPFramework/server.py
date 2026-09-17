@@ -11,7 +11,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import uvicorn
-from app.main import app
+from app.web.main import app
 
 if __name__ == "__main__":
     print("=" * 60)

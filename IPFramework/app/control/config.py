@@ -1,8 +1,8 @@
 """Configuración de los controladores.
 
-control.py (el dispatcher) le entrega a este archivo las configuraciones
-provenientes del frontend (ganancias, parámetros). Desde aquí se persisten
-y el controlador seleccionado las consume.
+control/__init__.py (el dispatcher) le entrega a este archivo las
+configuraciones provenientes del frontend (ganancias, parámetros). Desde
+aquí se persisten y el controlador seleccionado las consume.
 
 Cómo agregar config para un controlador nuevo:
     Añadir un bloque con el prefijo <CONTROLADOR>_ (p. ej. PID_GAINS) y que
