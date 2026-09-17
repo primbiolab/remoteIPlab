@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from .states import state, ws_broadcast, check_serial, check_idle
 from . import control as control_dispatcher
 from .loops import (
-    _monitor_loop, _control_loop_lqr,
+    _monitor_loop, _control_loop,
     _stop_all_threads, _clean_stop_and_close,
 )
 
@@ -56,6 +56,7 @@ async def health():
         "running": state.is_running,
         "monitoring": state.is_monitoring,
         "controller": control_dispatcher.get_current_type(),
+        "controllers": control_dispatcher.get_available(),
         "gains": control_dispatcher.get_gains(),
         "calibration": {
             "calibrated": ctrl.is_calibrated() if ctrl else False,
@@ -131,7 +132,7 @@ async def start_control():
         state.data_log[k] = []
 
     state.is_running = True
-    state.control_thread = threading.Thread(target=_control_loop_lqr, daemon=True)
+    state.control_thread = threading.Thread(target=_control_loop, daemon=True)
     state.control_thread.start()
     return {"status": "running", "controller": control_dispatcher.get_current_type()}
 

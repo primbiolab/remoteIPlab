@@ -32,7 +32,6 @@ class PendulumApp {
       graphs: document.getElementById("graphsPage"),
     };
 
-    this.controlType = document.getElementById("controlType");
     this.comPort = document.getElementById("comPort");
     this.baudRate = document.getElementById("baudRate");
     this.scanPortsBtn = document.getElementById("scanPortsBtn");
@@ -43,6 +42,7 @@ class PendulumApp {
     this.runBtn = document.getElementById("runBtn");
     this.stopBtn = document.getElementById("stopBtn");
     this.connectionStatus = document.getElementById("connectionStatus");
+    this.controlType = document.getElementById("controlType");
 
     this.posVal = document.getElementById("posVal");
     this.velVal = document.getElementById("velVal");
@@ -111,10 +111,6 @@ class PendulumApp {
     this.connectSerialBtn.addEventListener("click", () => this.connectSerial());
     this.disconnectSerialBtn.addEventListener("click", () => this.disconnectSerial());
 
-    this.controlType.addEventListener("change", () => {
-      this.wsSend({ action: "set_controller", controller: this.controlType.value });
-    });
-
     this.clearGraphsBtn.addEventListener("click", () => this._clearAllCharts());
     this.exportCsvBtn.addEventListener("click", () => this.exportData());
 
@@ -125,6 +121,12 @@ class PendulumApp {
       this._showConfirmation("applyGainsToast", "Ganancias enviadas");
     };
     this.applyGainsBtn.addEventListener("click", applyGains);
+
+    if (this.controlType) {
+      this.controlType.addEventListener("change", () => {
+        this.wsSend({ action: "set_controller", controller: this.controlType.value });
+      });
+    }
 
     // Direction buttons: press & hold
     this.moveLeftBtn.addEventListener("mousedown", (e) => { e.preventDefault(); this.startMoving("left"); });
@@ -256,19 +258,22 @@ class PendulumApp {
             if (el) el.value = d.gains[i];
           });
         }
+        if (Array.isArray(d.controllers) && d.controllers.length) {
+          this._populateControllers(d.controllers);
+        }
         if (d.monitoring && !this.isMonitoring) {
           this.isMonitoring = true;
           this.monitorBtn.textContent = "⏹ Detener Monitoreo";
           this.monitorBtn.classList.add("active");
           this.monitorBtn.disabled = false;
-          this.runBtn.disabled = true;
+          this._updateRunAvailability();
           if (this.modeVal) this.modeVal.textContent = "Monitor";
           this.connectWs();
         } else if (!d.monitoring && this.isMonitoring && !this.isRunning) {
           this.isMonitoring = false;
           this.monitorBtn.textContent = "🔍 Monitorear";
           this.monitorBtn.classList.remove("active");
-          this.runBtn.disabled = false;
+          this._updateRunAvailability();
         }
       } else this.setConnected(false);
     } catch { this.setConnected(false); }
@@ -281,6 +286,7 @@ class PendulumApp {
     else { dot.style.background = "var(--red)"; text.textContent = "Desconectado"; }
     this.serialConnected = ok && mode === "Serial";
     this._updateMonitorAvailability();
+    this._updateRunAvailability();
   }
 
   _updateMonitorAvailability() {
@@ -291,6 +297,15 @@ class PendulumApp {
     this.monitorBtn.title = enabled
       ? ""
       : "Haz clic en Conectar serial (Arduino) para habilitar el monitoreo.";
+  }
+
+  _updateRunAvailability() {
+    if (!this.runBtn) return;
+    const enabled = !this.isRunning && this.serialConnected;
+    this.runBtn.disabled = !enabled;
+    this.runBtn.title = enabled
+      ? ""
+      : "Conecta el serial (Arduino) para habilitar la ejecución del controlador.";
   }
 
   async scanPorts() {
@@ -324,13 +339,31 @@ class PendulumApp {
     }
   }
 
+  _populateControllers(list) {
+    if (!this.controlType || !Array.isArray(list) || list.length === 0) return;
+    const fingerprint = list.map((c) => c.key).join(",");
+    if (fingerprint === this._controllerKeysFingerprint) return;
+    const current = this.controlType.value;
+    this.controlType.innerHTML = "";
+    list.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c.key;
+      opt.textContent = c.label;
+      this.controlType.appendChild(opt);
+    });
+    this._controllerKeysFingerprint = fingerprint;
+    if (current && list.some((c) => c.key === current)) {
+      this.controlType.value = current;
+    }
+  }
+
   connectWs() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     try {
       this.ws = new WebSocket(this.wsUrl);
       this.ws.onopen = () => {
         console.log("WS connected");
-        this.wsSend({ action: "set_controller", controller: this.controlType.value });
+        this.wsSend({ action: "set_controller", controller: this.controlType.value || "lqr" });
       };
       this.ws.onmessage = (e) => {
         try { this.updateUI(JSON.parse(e.data)); }
@@ -362,7 +395,7 @@ class PendulumApp {
     this.monitorBtn.textContent = "⏹ Detener Monitoreo";
     this.monitorBtn.classList.add("active");
     this.monitorBtn.disabled = false;
-    this.runBtn.disabled = true;
+    this._updateRunAvailability();
     if (this.modeVal) this.modeVal.textContent = "Monitor";
     const c = document.getElementById("pendulumCanvas");
     if (c && !this.drawer) this.drawer = new PendulumDrawer(c);
@@ -374,7 +407,7 @@ class PendulumApp {
     this.monitorBtn.textContent = "🔍 Monitorear";
     this.monitorBtn.classList.remove("active");
     this.monitorBtn.disabled = false;
-    this.runBtn.disabled = false;
+    this._updateRunAvailability();
     if (this.modeVal) this.modeVal.textContent = "Serial";
   }
 
@@ -394,6 +427,7 @@ class PendulumApp {
       alert("Error al iniciar: " + (e.message || "desconocido"));
       return;
     }
+    this.isMonitoring = false;
     this.connectWs();
 
     const c = document.getElementById("pendulumCanvas");
@@ -415,7 +449,7 @@ class PendulumApp {
         this.monitorBtn.textContent = "⏹ Detener Monitoreo";
         this.monitorBtn.classList.add("active");
         this.monitorBtn.disabled = false;
-        this.runBtn.disabled = true;
+        this._updateRunAvailability();
         if (this.modeVal) this.modeVal.textContent = "Monitor";
       }
     } catch {}

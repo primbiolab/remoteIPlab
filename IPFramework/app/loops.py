@@ -54,13 +54,11 @@ def _monitor_loop():
             })
         time.sleep(0.01)
 
-# ── LQR + Swing-up control loop ─────────────────────────────────
+# ── Control loop (genérico, funciona con cualquier controlador) ──
 
-def _control_loop_lqr():
+def _control_loop():
     ctrl = state.controller
-    ctrl.send_center()
-    time.sleep(2)
-    control.reset_startup()
+    control.prepare_start(ctrl)
     state.run_start_time = time.time()
     recovering = False
     recovery_start = 0

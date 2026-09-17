@@ -2,15 +2,18 @@
 
 Toda la lógica de control relacionada con LQR vive aquí en un único archivo.
 Recibe el estado medido por serial.py y devuelve el voltaje a aplicar.
-La selección del controlador la realiza control.py (control/__init__.py).
+La selección del controlador la realiza control.py.
 """
 import math
 
-from ..config import G, MP, LP, JP
+from .base import BaseController
+from .config import G, MP, LP, JP
 from . import config as ctrl_config
 
 
-class LQRController:
+class LQRController(BaseController):
+    name = "LQR + Swing-up"
+
     def __init__(self):
         # Constantes físicas compartidas desde config.py
         self.mplp = MP * LP
