@@ -124,6 +124,11 @@ python server.py
 
 Acceder a [http://localhost:8080](http://localhost:8080) en el navegador.
 
+> Por defecto el servidor arranca en **modo local**: cada quien conecta su
+> propio péndulo (puerto y cámara elegibles). El despliegue público en
+> `iplab.primbiolab.org` usa el mismo código pero con `APP_MODE=remote`
+> (puerto/cámara fijos del laboratorio, autoconectados). Ver [DEPLOY.md](DEPLOY.md).
+
 ---
 
 ## Uso

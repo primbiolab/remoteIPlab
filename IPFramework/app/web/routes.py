@@ -16,6 +16,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..core.states import state, check_serial, check_idle
 from .. import control as control_dispatcher
+from ..settings import (
+    APP_MODE, IS_REMOTE, SERIAL_PORT, SERIAL_BAUD,
+    CAMERA_ENABLED, REMOTE_LABEL,
+)
 from ..core.loops import (
     _monitor_loop, _control_loop,
     _stop_all_threads, _clean_stop_and_close,
@@ -45,6 +49,30 @@ class MoveRequest(BaseModel):
     voltage: float = 5.0
 
 
+# ── Config pública (modo local/remoto) ──────────────────────────
+
+@router.get("/api/config")
+async def public_config():
+    """Dice al frontend en qué modo operar sin exponer secretos."""
+    return {
+        "mode": APP_MODE,
+        "remote": IS_REMOTE,
+        "remote_label": REMOTE_LABEL if IS_REMOTE else "",
+        "serial": {
+            # En remoto el puerto es fijo y no editable.
+            "port": SERIAL_PORT if IS_REMOTE else None,
+            "baudrate": SERIAL_BAUD if IS_REMOTE else None,
+            "fixed": IS_REMOTE,
+        },
+        "camera": {
+            # En remoto la cámara la sirve el backend (/camera/stream).
+            # En local el frontend usa getUserMedia.
+            "remote_stream": IS_REMOTE and CAMERA_ENABLED,
+            "stream_url": "/camera/stream" if (IS_REMOTE and CAMERA_ENABLED) else None,
+        },
+    }
+
+
 # ── Health ──────────────────────────────────────────────────────
 
 @router.get("/health")
@@ -52,6 +80,8 @@ async def health():
     ctrl = state.controller
     return {
         "status": "ok",
+        "mode": APP_MODE,
+        "remote": IS_REMOTE,
         "connected": ctrl.is_connected(),
         "running": state.is_running,
         "monitoring": state.is_monitoring,
@@ -72,6 +102,9 @@ async def health():
 
 @router.get("/ports")
 async def list_ports():
+    if IS_REMOTE:
+        # Puerto fijo del laboratorio: no exponer escaneo del servidor.
+        return {"ports": [{"device": SERIAL_PORT, "description": "Laboratorio (fijo)", "hwid": ""}], "fixed": True}
     import serial.tools.list_ports
     ports = []
     for p in serial.tools.list_ports.comports():
@@ -80,6 +113,17 @@ async def list_ports():
 
 @router.post("/connect")
 async def connect_serial(req: ConnectRequest):
+    if IS_REMOTE:
+        # En remoto el visitante no elige puerto: se usa el fijo del lab.
+        try:
+            if state.controller.is_connected():
+                return {"status": "connected", "port": state.controller.port, "fixed": True}
+            state.controller.port = SERIAL_PORT
+            state.controller.baudrate = SERIAL_BAUD
+            state.controller.connect()
+            return {"status": "connected", "port": SERIAL_PORT, "fixed": True}
+        except Exception as e:
+            return JSONResponse(status_code=500, content={"error": str(e)})
     try:
         if state.controller.is_connected():
             state.controller.close()
@@ -92,6 +136,9 @@ async def connect_serial(req: ConnectRequest):
 
 @router.post("/disconnect")
 async def disconnect_serial():
+    if IS_REMOTE:
+        # Evita que un visitante remoto desconecte el hardware del lab.
+        return JSONResponse(status_code=403, content={"error": "Desconexión deshabilitada en modo remoto"})
     _clean_stop_and_close()
     return {"status": "disconnected"}
 
@@ -270,6 +317,32 @@ async def move_start(req: MoveRequest):
 async def move_stop():
     state.controller.send_voltage(0)
     return {"status": "stopped"}
+
+# ── Cámara del laboratorio (solo modo remoto) ───────────────────
+
+@router.get("/camera/status")
+async def camera_status():
+    from ..settings import CAMERA_ENABLED as _cam_enabled
+    from ..hardware.camera import lab_camera as _cam
+    return {"enabled": bool(_cam_enabled and IS_REMOTE), "running": _cam.is_running()}
+
+
+@router.get("/camera/stream")
+async def camera_stream():
+    """Stream MJPEG de la cámara fija del laboratorio."""
+    from ..settings import CAMERA_ENABLED as _cam_enabled
+    from ..hardware.camera import lab_camera as _cam, mjpeg_generator as _gen
+    if not (IS_REMOTE and _cam_enabled):
+        return JSONResponse(status_code=404, content={"error": "Cámara remota no habilitada"})
+    if not _cam.is_running():
+        _cam.start()
+        if not _cam.is_running():
+            return JSONResponse(status_code=503, content={"error": "Cámara del laboratorio no disponible"})
+    return StreamingResponse(
+        _gen(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 # ── Data export ─────────────────────────────────────────────────
 

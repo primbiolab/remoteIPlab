@@ -7,17 +7,31 @@ class PendulumApp {
     this.drawer = null;
     this.charts = {};
 
-    this.backendUrl = `http://${window.location.hostname}:8080`;
-    this.wsUrl = `ws://${window.location.hostname}:8080/ws`;
+    // Mismo-origen: funciona en local (http://localhost:8080) y detrás de
+    // Cloudflare Tunnel (https://iplab.primbiolab.org) sin puertos fijos.
+    // Se permite override con ?api=https://... solo para desarrollo.
+    const params = new URLSearchParams(window.location.search);
+    const apiOverride = (params.get("api") || "").replace(/\/$/, "");
+    this.backendUrl = apiOverride || "";
+    const wsProto = window.location.protocol === "https:" ? "wss" : "ws";
+    this.wsUrl = apiOverride
+      ? apiOverride.replace(/^http/, "ws") + "/ws"
+      : `${wsProto}://${window.location.host}/ws`;
 
-    
+    this.appMode = "local";
+    this.isRemote = false;
+    this.remoteStreamUrl = null;
+
     this.initElements();
     this.initEvents();
     this.initCharts();
-    this.checkBackend();
-    this.scanPorts();
+    this.loadAppConfig().finally(() => {
+      this.checkBackend();
+      this.scanPorts();
+    });
     setInterval(() => this.checkBackend(), 10000);
-    setInterval(() => this.scanPorts(), 5000);
+    // En remoto el puerto es fijo: no re-escanear cada 5s.
+    this._portsTimer = setInterval(() => { if (!this.isRemote) this.scanPorts(); }, 5000);
     this.navigate("pendulum"); 
   }
 
@@ -233,6 +247,76 @@ class PendulumApp {
     Object.values(this.charts).forEach((c) => c.clear());
   }
 
+  async loadAppConfig() {
+    try {
+      const r = await fetch(`${this.backendUrl}/api/config`);
+      if (!r.ok) return;
+      const cfg = await r.json();
+      this.appMode = cfg.mode || "local";
+      this.isRemote = !!cfg.remote;
+      this.remoteStreamUrl = cfg.camera?.stream_url || null;
+      if (this.isRemote) this._applyRemoteMode(cfg);
+    } catch (e) {
+      console.warn("No se pudo cargar /api/config, asumiendo modo local:", e);
+    }
+  }
+
+  _applyRemoteMode(cfg) {
+    // Banner remoto
+    const badge = document.getElementById("remoteBadge");
+    if (badge) {
+      badge.classList.remove("hidden");
+      const label = document.getElementById("remoteBadgeText");
+      if (label) label.textContent = cfg.remote_label || "Modo remoto — Laboratorio";
+    }
+    // Serial fijo: ocultar selección, mostrar puerto del laboratorio
+    const serialPanel = document.querySelector(".serial-panel");
+    if (serialPanel) serialPanel.classList.add("remote-fixed");
+    if (this.comPort) {
+      const fixedPort = cfg.serial?.port || "/dev/ttyACM0";
+      this.comPort.innerHTML = "";
+      const o = document.createElement("option");
+      o.value = fixedPort;
+      o.textContent = `${fixedPort} — Laboratorio (fijo)`;
+      this.comPort.appendChild(o);
+      this.comPort.value = fixedPort;
+      this.comPort.disabled = true;
+    }
+    if (this.baudRate) this.baudRate.disabled = true;
+    if (this.scanPortsBtn) this.scanPortsBtn.style.display = "none";
+    if (this.connectSerialBtn) this.connectSerialBtn.style.display = "none";
+    if (this.disconnectSerialBtn) this.disconnectSerialBtn.style.display = "none";
+    if (this.serialStatus) {
+      this.serialStatus.innerHTML = '<span style="color:var(--green)">✔ Hardware del laboratorio (autoconectado)</span>';
+    }
+    // Cámara remota: usar stream MJPEG del lab en vez de webcam local
+    if (this.remoteStreamUrl) this._useRemoteCamera(this.remoteStreamUrl);
+    if (this.cameraSelect) this.cameraSelect.disabled = true;
+  }
+
+  _useRemoteCamera(streamUrl) {
+    const imgId = "remoteCameraImg";
+    let img = document.getElementById(imgId);
+    if (!img) {
+      const viewport = document.querySelector(".camera-viewport");
+      if (!viewport) return;
+      img = document.createElement("img");
+      img.id = imgId;
+      img.alt = "Cámara del laboratorio";
+      img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block;";
+      viewport.prepend(img);
+    }
+    img.src = `${this.backendUrl}${streamUrl}`;
+    if (this.cameraFeed) this.cameraFeed.style.display = "none";
+    if (this.cameraOff) this.cameraOff.classList.add("hidden");
+    if (this.toggleCameraBtn) {
+      this.toggleCameraBtn.textContent = "Recargar";
+      this.toggleCameraBtn.onclick = () => {
+        img.src = `${this.backendUrl}${streamUrl}?t=${Date.now()}`;
+      };
+    }
+  }
+
   async checkBackend() {
     try {
       const ac = new AbortController();
@@ -307,6 +391,7 @@ class PendulumApp {
   }
 
   async scanPorts() {
+    if (this.isRemote) return; // puerto fijo en remoto
     try {
       const r = await fetch(`${this.backendUrl}/ports`);
       const d = await r.json();
@@ -571,6 +656,23 @@ class PendulumApp {
   }
 
   async connectSerial() {
+    if (this.isRemote) {
+      // En remoto el backend usa el puerto fijo; solo reintenta la conexión.
+      try {
+        const r = await fetch(`${this.backendUrl}/connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ port: this.comPort?.value || "/dev/ttyACM0", baudrate: 115200 }),
+        });
+        const d = await r.json();
+        if (!r.ok && this.serialStatus) {
+          this.serialStatus.innerHTML = `<span style="color:var(--red)">✖ Error: ${d.error || "conexión fallida"}</span>`;
+          return;
+        }
+        this.checkBackend();
+      } catch {}
+      return;
+    }
     const port = this.comPort.value;
     if (!port) {
       if (this.serialStatus) {
@@ -726,6 +828,7 @@ class PendulumApp {
   }
 
   async listCameras() {
+    if (this.isRemote && this.remoteStreamUrl) return; // stream del lab, no webcam local
     try {
       let devices = await navigator.mediaDevices.enumerateDevices();
       let cameras = devices.filter(d => d.kind === "videoinput");
@@ -755,6 +858,11 @@ class PendulumApp {
   }
 
   async toggleCamera() {
+    if (this.isRemote && this.remoteStreamUrl) {
+      const img = document.getElementById("remoteCameraImg");
+      if (img) img.src = `${this.backendUrl}${this.remoteStreamUrl}?t=${Date.now()}`;
+      return;
+    }
     if (this.cameraStream) {
       this.stopCamera();
     } else {

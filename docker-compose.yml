@@ -1,0 +1,50 @@
+# PRIMBIO — despliegue del laboratorio (PC con el péndulo).
+#
+# Este compose levanta:
+#   1. app: FastAPI + frontend en modo REMOTO (puerto/cámara fijos, autoconectados)
+#   2. cloudflared: túnel hacia iplab.primbiolab.org (sin abrir puertos)
+#   3. (opcional) watchtower: actualiza la imagen al hacer push a GitHub
+#
+# Uso en el PC del laboratorio:
+#   cp .env.example .env   # y ajusta TUNNEL_TOKEN
+#   docker compose up -d --build
+
+services:
+  app:
+    build: .
+    # Si publicas la imagen en GHCR, comenta `build:` y usa `image:`:
+    # image: ghcr.io/primbiolab/remoteiplab:latest
+    container_name: iplab-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/video0:/dev/video0
+      - /dev/video2:/dev/video2
+      - /dev/video3:/dev/video3
+    group_add:
+      - dialout
+      - video
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: iplab-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+  # Auto-actualización al hacer push a GitHub (opcional pero recomendado).
+  # Vigila GHCR cada 60s y reinicia `app` con la imagen nueva.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: iplab-watchtower
+    restart: unless-stopped
+    command: --interval 60 --cleanup app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    profiles:
+      - auto-update

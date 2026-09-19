@@ -7,3 +7,5 @@ fastapi
 # uvicorn
 uvicorn[standard]
 pydantic
+# Cámara del laboratorio (modo remoto, stream MJPEG). Headless para Docker.
+opencv-python-headless>=4.8

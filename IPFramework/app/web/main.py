@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..settings import FRONTEND_DIR
+from ..settings import FRONTEND_DIR, IS_REMOTE, AUTO_CONNECT, SERIAL_PORT, SERIAL_BAUD, CAMERA_ENABLED
 from ..core.states import state
 from .routes import router
 from ..core.loops import _clean_stop_and_close
@@ -14,7 +14,28 @@ from ..core.loops import _clean_stop_and_close
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     state.loop = asyncio.get_event_loop()
+    # Modo remoto: autoconectar serial fijo y encender cámara del lab.
+    if IS_REMOTE and AUTO_CONNECT:
+        try:
+            if not state.controller.is_connected():
+                state.controller.port = SERIAL_PORT
+                state.controller.baudrate = SERIAL_BAUD
+                state.controller.connect()
+                print(f"[remote] Serial autoconectado: {SERIAL_PORT} @ {SERIAL_BAUD}")
+        except Exception as e:
+            print(f"[remote] No se pudo autoconectar el serial ({SERIAL_PORT}): {e}")
+    if IS_REMOTE and CAMERA_ENABLED:
+        try:
+            from ..hardware.camera import lab_camera
+            lab_camera.start()
+        except Exception as e:
+            print(f"[remote] Cámara no disponible: {e}")
     yield
+    try:
+        from ..hardware.camera import lab_camera as _cam
+        _cam.stop()
+    except Exception:
+        pass
     _clean_stop_and_close()
 
 

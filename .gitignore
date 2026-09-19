@@ -5,3 +5,4 @@ IPFramework/ino/ArduinoMega/
 instrucciones.md
 __pycache__/
 *.pyc
+.env
